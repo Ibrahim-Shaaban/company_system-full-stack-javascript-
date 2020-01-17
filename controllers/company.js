@@ -13,19 +13,21 @@ const addCompany = async (req, res) => {
     // check if there is a company with the same address
     let company = await Company.findOne({ address });
 
-    if (company) {
+    if (company && company.isActive) {
       return res
         .status(400)
         .json({ errors: [{ msg: "this address is already existed" }] });
     }
+    if (company && !company.isActive) {
+      company.address = `${company.address} , deleted address :${company._id}`;
+      await company.save();
+    }
 
     // save new company in database
-
     let newCompany = await Company.create({ name, code, address });
 
-    return res.json(_.pick(newCompany, ["_id", "code", "name", "address"]));
-
     // return the saved company
+    return res.json(_.pick(newCompany, ["_id", "code", "name", "address"]));
   } catch (error) {
     console.log(error);
     return res.status(500).json("internal server error");
@@ -43,8 +45,25 @@ const editcompany = async (req, res) => {
         .status(400)
         .json({ errors: [{ msg: "company is not found" }] });
     }
-    // edit company and save it
+
     const { name, code, address } = req.body;
+    // check if there is a company with the same address
+    let companyFound = await Company.findOne({
+      address,
+      _id: { $ne: companyId }
+    });
+
+    if (companyFound && companyFound.isActive) {
+      return res
+        .status(400)
+        .json({ errors: [{ msg: "this address is already existed" }] });
+    }
+    if (companyFound && !companyFound.isActive) {
+      companyFound.address = `${companyFound.address} , deleted address`;
+      await companyFound.save();
+    }
+
+    // edit company and save it
     let newCompany = await Company.findByIdAndUpdate(
       companyId,
       { name, code, address },
@@ -59,6 +78,7 @@ const editcompany = async (req, res) => {
         .status(400)
         .json({ errors: [{ msg: "companyId is not valid" }] });
     }
+    console.log(error);
     return res.status(500).json("internal server error");
   }
 };
@@ -83,14 +103,14 @@ const deleteCompany = async (req, res) => {
     }
     // edit company and save it
 
-    let newCompany = await Company.findByIdAndUpdate(
+    await Company.findByIdAndUpdate(
       companyId,
       { isActive: false },
       { new: true }
-    ).select("-isActive");
+    );
 
     // return the new company
-    return res.json(newCompany);
+    return res.json({ isDeleted: true });
   } catch (error) {
     if (error.kind === "ObjectId") {
       return res
@@ -127,6 +147,7 @@ const getCompany = async (req, res) => {
         .status(400)
         .json({ errors: [{ msg: "companyId is not valid" }] });
     }
+    console.log(error);
     return res.status(500).json("internal server error");
   }
 };
@@ -138,6 +159,7 @@ const getCompanies = async (req, res) => {
     );
     return res.json(allCompanies);
   } catch (error) {
+    console.log(error);
     return res.status(500).json("internal server error");
   }
 };
